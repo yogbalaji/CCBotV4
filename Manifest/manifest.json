@@ -1,0 +1,42 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.5/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.5",
+  "version": "4.1.5",
+  "id": "148a66bb-e83d-425a-927d-09f4299a9274",
+  "packageName": "com.microsoft.teams.companycommunicator",
+  "developer": {
+    "name": "Contoso",
+    "websiteUrl": "https://www.constoso.com",
+    "privacyUrl": "https://www.contosoprivacy.com",
+    "termsOfUseUrl": "https://www.contosoterms.com"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Company Communicator",
+    "full": "Company Communicator"
+  },
+  "description": {
+    "short": "Broadcast messages to multiple teams and people in one go",
+    "full": "Broadcasts messages to multiple teams and individuals through channel posts and chat messages"
+  },
+  "accentColor": "#64A2CC",
+  "bots": [{
+    "botId": "053cc23d-7557-417a-a14c-7512361dd9e1",
+    "scopes": [
+      "personal",
+      "team"
+    ],
+    "supportsFiles": false,
+    "isNotificationOnly": true
+  }],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "angtanycc.azurefd.net"
+  ]
+}
