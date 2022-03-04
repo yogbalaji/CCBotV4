@@ -14,6 +14,9 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Common.Repositories.Notificat
     using Microsoft.Azure.Cosmos.Table;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
+    using global::Azure.Core;
+    using global::Azure.Storage.Sas;
+  
 
     /// <summary>
     /// Repository of the notification data in the table storage.
@@ -284,35 +287,66 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Common.Repositories.Notificat
                 : $"{originalString}{Environment.NewLine}{newString}";
         }
 
-        public async Task<string> UploadToBlob(string base64Image)
+        public async Task<string> UploadToBlob(string base64Image, int tokenExpiryHours)
         {
             var encodedImage = base64Image.Split(',')[1];
             var decodedImage = Convert.FromBase64String(encodedImage);
-            string connectionString = StorageAccountConnectionString;
-            string containerName = "imageUpload";
-            string fileName = "TestImage1" + Guid.NewGuid();
 
-            CloudStorageAccount storageAccount = CloudStorageAccount.Parse(connectionString);
-            /* BlobServiceClient blobServiceClient = new Azure.Storage.Blobs.BlobServiceClient(connectionString);
-             BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);*/
+            string connectionString = this.StorageAccountConnectionString;
+
+            //string containerName = "imageUpload";
+            //string fileName = "TestImage1" + Guid.NewGuid();
+
+            /*CloudStorageAccount storageAccount = CloudStorageAccount.Parse(connectionString);
             StorageSharedKeyCredential storageCredentials =
-            new StorageSharedKeyCredential(storageAccount.Credentials.AccountName,storageAccount.Credentials.Key);
+            new StorageSharedKeyCredential(storageAccount.Credentials.AccountName,storageAccount.Credentials.Key);*/
+
+            // Create a container
+            var options = new BlobClientOptions();
+
+            // configure retries
+            options.Retry.MaxRetries = 5; // default is 3
+            options.Retry.Mode = RetryMode.Exponential; // default is fixed retry policy
+            options.Retry.Delay = TimeSpan.FromSeconds(1); // default is 0.8s
+
+            BlobContainerClient blobContainer = new BlobContainerClient(connectionString, "imageupload", options);
+            await blobContainer.CreateIfNotExistsAsync();
+
+            var blob = blobContainer.GetBlobClient(Guid.NewGuid().ToString() + ".jpg");
+
             // Create a URI to the blob
-            Uri blobUri = new Uri("https://" +
+            /*Uri blobUri = new Uri("https://" +
                                   storageAccount.Credentials.AccountName +
                                   ".blob.core.windows.net/" +
                                   containerName +
-                                  "/" + fileName);
-
-
-            BlobClient blobClient = new BlobClient(blobUri ,storageCredentials);
+                                  "/" + fileName);*/
+            // BlobClient blobClient = new BlobClient(blobUri ,storageCredentials);
 
             using (var fileStream = new MemoryStream(decodedImage))
             {
                 // upload image stream to blob
-                await blobClient.UploadAsync(fileStream, true);
+                await blob.UploadAsync(fileStream, true);
             }
-            return blobUri.ToString();
+
+            if (blobContainer.CanGenerateSasUri)
+            {
+                // Create a SAS token that's valid for one hour.
+                BlobSasBuilder sasBuilder = new BlobSasBuilder()
+                {
+                    BlobContainerName = blobContainer.Name,
+                    BlobName = blob.Name,
+                    Resource = "b"
+                };
+
+                sasBuilder.ExpiresOn = DateTimeOffset.UtcNow.AddHours(tokenExpiryHours);
+                sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+                return blob.GenerateSasUri(sasBuilder).AbsoluteUri;
+            }
+            else
+            {
+                return base64Image;
+            }
         }
     }
 }

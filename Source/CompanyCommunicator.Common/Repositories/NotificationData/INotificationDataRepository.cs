@@ -87,6 +87,6 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Common.Repositories.Notificat
             string notificationDataEntityId,
             string warningMessage);
 
-        public Task<string> UploadToBlob(string base64Image);
+        public Task<string> UploadToBlob(string base64Image,int tokenExpiryHours);
     }
 }

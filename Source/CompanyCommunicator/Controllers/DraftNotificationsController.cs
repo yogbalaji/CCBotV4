@@ -13,12 +13,14 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Controllers
     using Microsoft.AspNetCore.Authorization;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.Extensions.Localization;
+    using Microsoft.Extensions.Options;
     using Microsoft.Teams.Apps.CompanyCommunicator.Authentication;
     using Microsoft.Teams.Apps.CompanyCommunicator.Common.Repositories.NotificationData;
     using Microsoft.Teams.Apps.CompanyCommunicator.Common.Repositories.TeamData;
     using Microsoft.Teams.Apps.CompanyCommunicator.Common.Resources;
     using Microsoft.Teams.Apps.CompanyCommunicator.Common.Services;
     using Microsoft.Teams.Apps.CompanyCommunicator.Common.Services.MicrosoftGraph;
+    using Microsoft.Teams.Apps.CompanyCommunicator.Controllers.Options;
     using Microsoft.Teams.Apps.CompanyCommunicator.DraftNotificationPreview;
     using Microsoft.Teams.Apps.CompanyCommunicator.Models;
     using Microsoft.Teams.Apps.CompanyCommunicator.Repositories.Extensions;
@@ -34,6 +36,7 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Controllers
         private readonly ITeamDataRepository teamDataRepository;
         private readonly IDraftNotificationPreviewService draftNotificationPreviewService;
         private readonly IGroupsService groupsService;
+        private readonly UserAppOptions userAppOptions;
         private readonly IAppSettingsService appSettingsService;
         private readonly IStringLocalizer<Strings> localizer;
 
@@ -46,19 +49,23 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Controllers
         /// <param name="appSettingsService">App Settings service.</param>
         /// <param name="localizer">Localization service.</param>
         /// <param name="groupsService">group service.</param>
+        /// <param name="userAppOptions">userAppOptions.</param>
+        ///
         public DraftNotificationsController(
             INotificationDataRepository notificationDataRepository,
             ITeamDataRepository teamDataRepository,
             IDraftNotificationPreviewService draftNotificationPreviewService,
             IAppSettingsService appSettingsService,
             IStringLocalizer<Strings> localizer,
-            IGroupsService groupsService)
+            IGroupsService groupsService,
+            IOptions<UserAppOptions> userAppOptions)
         {
             this.notificationDataRepository = notificationDataRepository ?? throw new ArgumentNullException(nameof(notificationDataRepository));
             this.teamDataRepository = teamDataRepository ?? throw new ArgumentNullException(nameof(teamDataRepository));
             this.draftNotificationPreviewService = draftNotificationPreviewService ?? throw new ArgumentNullException(nameof(draftNotificationPreviewService));
             this.localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
             this.groupsService = groupsService ?? throw new ArgumentNullException(nameof(groupsService));
+            this.userAppOptions = userAppOptions?.Value ?? throw new ArgumentNullException(nameof(userAppOptions));
             this.appSettingsService = appSettingsService ?? throw new ArgumentNullException(nameof(appSettingsService));
         }
 
@@ -86,18 +93,46 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Controllers
                 return this.Forbid();
             }
 
+            if (!this.CheckUrl(notification.ImageLink))
+            {
+                notification.ImageLink = this.UploadToBlobExtension(notification);
+            }
+
             notification.TrackingUrl = this.HttpContext.Request.Scheme + "://" + this.HttpContext.Request.Host + "/api/sentNotifications/tracking";
 
-            notification.ImageLink = this.UploadToBlobExtension(notification);
+            // notification.ImageLink = this.UploadToBlobExtension(notification);
             var notificationId = await this.notificationDataRepository.CreateDraftNotificationAsync(
                 notification,
                 this.HttpContext.User?.Identity?.Name);
             return this.Ok(notificationId);
         }
 
+        private bool CheckUrl(string urlString)
+        {
+            Uri uriResult;
+
+            if (Uri.TryCreate(urlString, UriKind.Absolute, out uriResult))
+            {
+                return uriResult.Scheme == Uri.UriSchemeHttps;
+            }
+            return false;
+        }
+
+        /// <summary>
+        ///  Mediator function to call UploadToBlob defined under NotificationDataRepository.cs
+        /// </summary>
+        /// <param name="notification"> Notification. </param>
+        /// <returns> Blob URL to the image uploaded. </returns>
+///
         public string UploadToBlobExtension(DraftNotification notification)
         {
-            return this.notificationDataRepository.UploadToBlob(notification.ImageLink).Result;
+            if (this.userAppOptions.ImageUploadBlobStorage && !string.IsNullOrWhiteSpace(notification.ImageLink))
+            {
+                int tokenExpiryHours = this.userAppOptions.ImageUploadBlobStorageSasDurationHours;
+                return this.notificationDataRepository.UploadToBlob(notification.ImageLink, tokenExpiryHours).Result;
+            }
+
+            return notification.ImageLink;
         }
 
         /// <summary>

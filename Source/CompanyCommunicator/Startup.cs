@@ -81,6 +81,7 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator
                     botOptions.UserAppPassword = configuration.GetValue<string>("UserAppPassword");
                     botOptions.AuthorAppId = configuration.GetValue<string>("AuthorAppId");
                     botOptions.AuthorAppPassword = configuration.GetValue<string>("AuthorAppPassword");
+                    botOptions.ImageUploadBlobStorage = configuration.GetValue<bool>("ImageUploadBlobStorage");
                 });
             services.AddOptions<BotFilterMiddlewareOptions>()
                 .Configure<IConfiguration>((botFilterMiddlewareOptions, configuration) =>
@@ -121,6 +122,12 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator
 
                     options.UserAppExternalId =
                         configuration.GetValue<string>("UserAppExternalId", "148a66bb-e83d-425a-927d-09f4299a9274");
+
+                    options.ImageUploadBlobStorage =
+                        configuration.GetValue<bool>("ImageUploadBlobStorage", false);
+
+                    options.ImageUploadBlobStorageSasDurationHours =
+                        configuration.GetValue<int>("ImageUploadBlobStorageSasDurationHours", 1);
                 });
 
             services.AddOptions();

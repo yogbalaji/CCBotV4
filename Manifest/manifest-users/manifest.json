@@ -1,22 +1,22 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.5/MicrosoftTeams.schema.json",
   "manifestVersion": "1.5",
-  "version": "4.1.5",
-  "id": "148a66bb-e83d-425a-927d-09f4299a9274",
+  "version": "5.0.1",
+  "id": "148a66bb-e83d-425a-927d-09f4299a9275",
   "packageName": "com.microsoft.teams.companycommunicator",
   "developer": {
     "name": "Contoso",
-    "websiteUrl": "https://www.constoso.com",
-    "privacyUrl": "https://www.contosoprivacy.com",
-    "termsOfUseUrl": "https://www.contosoterms.com"
+    "websiteUrl": "https://www.contosos.com",
+    "privacyUrl": "https://www.contosos.com",
+    "termsOfUseUrl": "https://www.contosos.com"
   },
   "icons": {
     "color": "color.png",
     "outline": "outline.png"
   },
   "name": {
-    "short": "Company Communicator",
-    "full": "Company Communicator"
+    "short": "Company User",
+    "full": "Company User"
   },
   "description": {
     "short": "Broadcast messages to multiple teams and people in one go",
@@ -24,7 +24,7 @@
   },
   "accentColor": "#64A2CC",
   "bots": [{
-    "botId": "053cc23d-7557-417a-a14c-7512361dd9e1",
+    "botId": "14cdf085-3f47-4368-8678-8599c89c3aeb",
     "scopes": [
       "personal",
       "team"
@@ -37,6 +37,6 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "angtanycc.azurefd.net"
+    "angtanyblb.azurefd.net"
   ]
 }

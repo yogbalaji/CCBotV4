@@ -12,7 +12,7 @@ import Resizer from 'react-image-file-resizer';
 import Papa from "papaparse";
 import './newMessage.scss';
 import './teamTheme.scss';
-import { getDraftNotification, getTeams, createDraftNotification, updateDraftNotification, searchGroups, getGroups, verifyGroupAccess } from '../../apis/messageListApi';
+import { getDraftNotification, getTeams, createDraftNotification, updateDraftNotification, searchGroups, getGroups, verifyGroupAccess,getAppSettings } from '../../apis/messageListApi';
 import { getInitAdaptiveCard, setCardTitle, setCardImageLink, setCardSummary, setCardAuthor, setCardBtns, setCardSubtitle } from '../AdaptiveCard/adaptiveCard';
 import { getBaseUrl } from '../../configVariables';
 import { ImageUtil } from '../../utility/imageutility';
@@ -31,6 +31,8 @@ const minutes = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50
 //coeficient to round dates to the next 5 minutes
 const coeff = 1000 * 60 * 5;
 
+//max size of the card 
+const maxCardSize = 30720;
 type dropdownItem = {
     key: string,
     header: string,
@@ -116,13 +118,18 @@ class NewMessage extends React.Component<INewMessageProps, formState> {
     private card: any;
     fileInput: any;
     CSVfileInput: any;
+    imageUploadBlobStorage: boolean; //property to store value indicating if the upload to blob storage is enabled or not
+    imageSize: number;
 
     constructor(props: INewMessageProps) {
         super(props);
         this.localize = this.props.t;
         this.card = getInitAdaptiveCard(this.localize);
         this.setDefaultCard(this.card);
-        var TempDate = this.getRoundedDate(5,this.getDateObject()); //get the current date
+        var TempDate = this.getRoundedDate(5, this.getDateObject()); //get the current date
+        this.imageUploadBlobStorage = false;
+        this.imageSize = 0;
+
         this.state = {
             title: "",
             subtitle:"",
@@ -177,49 +184,60 @@ class NewMessage extends React.Component<INewMessageProps, formState> {
         document.addEventListener("keydown", this.escFunction, false);
         let params = this.props.match.params;
         this.setGroupAccess();
-        this.getTeamList().then(() => {
-            if ('id' in params) {
-                let id = params['id'];
-                this.getItem(id).then(() => {
-                    const selectedTeams = this.makeDropdownItemList(this.state.selectedTeams, this.state.teams);
-                    const selectedRosters = this.makeDropdownItemList(this.state.selectedRosters, this.state.teams);
+
+        this.getAppSettings().then(() => {
+            this.getTeamList().then(() => {
+                if ('id' in params) {
+                    let id = params['id'];
+                    this.getItem(id).then(() => {
+                        const selectedTeams = this.makeDropdownItemList(this.state.selectedTeams, this.state.teams);
+                        const selectedRosters = this.makeDropdownItemList(this.state.selectedRosters, this.state.teams);
+                        this.setState({
+                            exists: true,
+                            messageId: id,
+                            selectedTeams: selectedTeams,
+                            selectedRosters: selectedRosters,
+                            csvusers: this.state.csvusers,
+                            selectedSchedule: this.state.selectedSchedule,
+                            selectedImportant: this.state.selectedImportant,
+                            scheduledDate: this.state.scheduledDate,
+                            DMY: this.getDateObject(this.state.scheduledDate),
+                            DMYHour: this.getDateHour(this.state.scheduledDate),
+                            DMYMins: this.getDateMins(this.state.scheduledDate),
+                            values: this.state.values
+                        })
+                    });
+                    this.getGroupData(id).then(() => {
+                        const selectedGroups = this.makeDropdownItems(this.state.groups);
+                        this.setState({
+                            selectedGroups: selectedGroups
+                        })
+                    });
+                } else {
                     this.setState({
-                        exists: true,
-                        messageId: id,
-                        selectedTeams: selectedTeams,
-                        selectedRosters: selectedRosters,
-                        csvusers: this.state.csvusers,
-                        selectedSchedule: this.state.selectedSchedule,
-                        selectedImportant: this.state.selectedImportant,
-                        scheduledDate: this.state.scheduledDate,
-                        DMY: this.getDateObject(this.state.scheduledDate),
-                        DMYHour: this.getDateHour(this.state.scheduledDate),
-                        DMYMins: this.getDateMins(this.state.scheduledDate),
-                        values: this.state.values
+                        exists: false,
+                        loader: false
+                    }, () => {
+                        let adaptiveCard = new AdaptiveCards.AdaptiveCard();
+                        adaptiveCard.parse(this.state.card);
+                        let renderedCard = adaptiveCard.render();
+                        document.getElementsByClassName('adaptiveCardContainer')[0].appendChild(renderedCard);
+                        if (this.state.btnLink) {
+                            let link = this.state.btnLink;
+                            adaptiveCard.onExecuteAction = function (action) { window.open(link, '_blank'); };
+                        }
                     })
-                });
-                this.getGroupData(id).then(() => {
-                    const selectedGroups = this.makeDropdownItems(this.state.groups);
-                    this.setState({
-                        selectedGroups: selectedGroups
-                    })
-                });
-            } else {
-                this.setState({
-                    exists: false,
-                    loader: false
-                }, () => {
-                    let adaptiveCard = new AdaptiveCards.AdaptiveCard();
-                    adaptiveCard.parse(this.state.card);
-                    let renderedCard = adaptiveCard.render();
-                    document.getElementsByClassName('adaptiveCardContainer')[0].appendChild(renderedCard);
-                    if (this.state.btnLink) {
-                        let link = this.state.btnLink;
-                        adaptiveCard.onExecuteAction = function (action) { window.open(link, '_blank'); };
-                    }
-                })
-            }
+                }
+            });
         });
+    }
+    // get the app configuration values and set targeting mode from app settings
+    private getAppSettings = async () => {
+        let response = await getAppSettings();
+        if (response.data) {
+            this.imageUploadBlobStorage = response.data.imageUploadBlobStorage; //get the value indicating if the image to blob storage option is enabled
+
+        }
     }
     //function to handle the selection of the OS file upload box
     private handleImageSelection() {
@@ -229,47 +247,51 @@ class NewMessage extends React.Component<INewMessageProps, formState> {
         if (file) { //if we have a file
             //resize the image to fit in the adaptivecard
             var cardsize = JSON.stringify(this.card).length;
-
-            let filebase64 = '';
-            this.getBase64(file, (result) => {
-                filebase64 = result;
-            });
-
-            //everything is ok with the image, lets set it on the card and update
-
-            setCardImageLink(this.card, filebase64.toString());
-            this.updateCard();
-            //lets set the state with the image value
-            this.setState({
-                imageLink: filebase64.toString()
-            }
-            );
-            /*Resizer.imageFileResizer(file, 400, 400, 'JPEG', 80, 0,
-                uri => {
-                    if (uri.toString().length < 30720) {
-                        //everything is ok with the image, lets set it on the card and update
-                        setCardImageLink(this.card, uri.toString());
-                        this.updateCard();
-                        //lets set the state with the image value
-                        this.setState({
-                            imageLink: uri.toString()
-                        }
-                        );
-                    } else {
-                        var errormsg = this.localize("ErrorImageTooBig") + " " + this.localize("ErrorImageTooBigSize") + " " + (30720 - cardsize) + " bytes.";
-                        //images bigger than 32K cannot be saved, set the error message to be presented
-                        this.setState({
-                            errorImageUrlMessage: errormsg
-                        });
+            if (this.imageUploadBlobStorage) {
+                var that = this;
+                let filebase64 = '';
+                this.getBase64(file, (result: any) => {
+                    filebase64 = result;
+                    //everything is ok with the image, lets set it on the card and update
+                    that.imageSize = filebase64.toString().length;
+                    setCardImageLink(this.card, filebase64.toString());
+                    that.updateCard();
+                    //lets set the state with the image value
+                    that.setState({
+                        imageLink: filebase64.toString()
                     }
+                    );
+                });
 
-                },
-                'base64'); */
-               //we need the image in base64
+            }
+            else {
+                Resizer.imageFileResizer(file, 400, 400, 'JPEG', 80, 0,
+                    uri => {
+                        if (uri.toString().length < maxCardSize - cardsize) {
+                            //everything is ok with the image, lets set it on the card and update
+                            setCardImageLink(this.card, uri.toString());
+                            this.updateCard();
+                            //lets set the state with the image value
+                            this.setState({
+                                imageLink: uri.toString()
+                            }
+                            );
+                        } else {
+                            var errormsg = this.localize("ErrorImageTooBig") + " " + this.localize("ErrorImageTooBigSize") + " " + (maxCardSize - cardsize) + " bytes.";
+                            //images bigger than 32K cannot be saved, set the error message to be presented
+                            this.setState({
+                                errorImageUrlMessage: errormsg
+                            });
+                        }
+
+                    },
+                    'base64'); //we need the image in base64
+            }
+
         }
     }
 
-    private getBase64(rawfile, convertedfile) {
+    private getBase64 = (rawfile:any, convertedfile:any) =>  {
 
         let reader = new FileReader();
         reader.readAsDataURL(rawfile);
@@ -277,7 +299,7 @@ class NewMessage extends React.Component<INewMessageProps, formState> {
             convertedfile(reader.result)
         };
         reader.onerror = function (error) {
-            console.log('Error: ', error);
+            console.log('Error while converting the image to base 64: ', error);
         };
     }
     //Function to handle the CSV File selection
