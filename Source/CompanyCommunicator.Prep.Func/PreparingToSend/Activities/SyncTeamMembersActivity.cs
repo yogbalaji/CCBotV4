@@ -112,10 +112,35 @@ namespace Microsoft.Teams.Apps.CompanyCommunicator.Prep.Func.PreparingToSend
                     teamId: teamInfo.TeamId,
                     tenantId: teamInfo.TenantId,
                     serviceUrl: teamInfo.ServiceUrl);
+                
+                foreach(var ue in userEntities)
+                {
+                    log.LogInformation("Tanya, check here user entity name is " + ue.UserId);
+                    log.LogInformation("Tanya, check here for user Entity" + ue.ServiceUrl);
+                }
 
                 // Convert to Recipients.
                 var recipients = await this.GetRecipientsAsync(notificationId, userEntities);
 
+                log.LogInformation("Tanya, check below");
+                var props = typeof(SentNotificationDataEntity).GetProperties();
+
+                foreach (var prop in props)
+                {
+                    log.LogInformation("Check : {0}\t", prop.Name);
+                }
+
+                log.LogInformation("\n");
+                foreach (var recipient in recipients)
+                {
+                    foreach (var prop in props)
+                    {
+                        log.LogInformation("Value: {0}\t", prop.GetValue(recipient, null));
+                    }
+
+                    log.LogInformation("\n");
+                }
+                
                 // Store.
                 await this.sentNotificationDataRepository.BatchInsertOrMergeAsync(recipients);
             }
